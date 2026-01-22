@@ -310,7 +310,7 @@ const AppointmentsPage = () => {
                                 </tr>
                             ) : (
                                 sortedAppointments.map((appt) => (
-                                    <tr key={appt.id} className={`hover:bg-gray-50 transition-all duration-500 ${appt.whatsappSent ? 'opacity-50 grayscale bg-gray-50' : ''}`}>
+                                    <tr key={appt.id} className="hover:bg-gray-50 transition-all duration-500">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center space-x-2">
                                                 <div
