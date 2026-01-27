@@ -1,45 +1,61 @@
 import { useState, useEffect } from 'react';
 
 // Helper component defined before usage to avoid any hoisting checks/issues
-const BlockItem = ({ block, slotOptions, onRemove, onChange }) => (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-2 p-2 bg-gray-50 rounded border border-gray-200">
-        <div className="form-group">
-            <label className="form-label text-xs">Inicio</label>
-            <input
-                type="time"
-                value={block.startTime}
-                onChange={(e) => onChange(block.index, 'startTime', e.target.value)}
-                className="input text-sm"
-            />
+const BlockItem = ({ block, slotOptions, onRemove, onChange }) => {
+    const [confirmed, setConfirmed] = useState(false);
+
+    const handleConfirm = () => {
+        setConfirmed(true);
+        setTimeout(() => setConfirmed(false), 2000);
+    };
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-2 p-2 bg-gray-50 rounded border border-gray-200">
+            <div className="form-group">
+                <label className="form-label text-xs">Inicio</label>
+                <input
+                    type="time"
+                    value={block.startTime}
+                    onChange={(e) => onChange(block.index, 'startTime', e.target.value)}
+                    className="input text-sm"
+                />
+            </div>
+            <div className="form-group">
+                <label className="form-label text-xs">Fin</label>
+                <input
+                    type="time"
+                    value={block.endTime}
+                    onChange={(e) => onChange(block.index, 'endTime', e.target.value)}
+                    className="input text-sm"
+                />
+            </div>
+            <div className="form-group">
+                <label className="form-label text-xs">Duración</label>
+                <select
+                    value={block.slotDurationMinutes}
+                    onChange={(e) => onChange(block.index, 'slotDurationMinutes', parseInt(e.target.value))}
+                    className="input text-sm"
+                >
+                    {slotOptions.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="flex flex-col justify-end gap-1">
+                <button
+                    type="button"
+                    onClick={handleConfirm}
+                    className={`btn text-[10px] w-full py-1 leading-none h-7 transition-all duration-300 ${confirmed ? 'bg-green-500 text-white hover:bg-green-600 border-none' : 'btn-primary'}`}
+                >
+                    {confirmed ? '¡Listo! ✅' : 'Guardar'}
+                </button>
+                <button type="button" onClick={onRemove} className="btn btn-secondary text-[10px] w-full py-1 leading-none h-7">
+                    Quitar
+                </button>
+            </div>
         </div>
-        <div className="form-group">
-            <label className="form-label text-xs">Fin</label>
-            <input
-                type="time"
-                value={block.endTime}
-                onChange={(e) => onChange(block.index, 'endTime', e.target.value)}
-                className="input text-sm"
-            />
-        </div>
-        <div className="form-group">
-            <label className="form-label text-xs">Duración</label>
-            <select
-                value={block.slotDurationMinutes}
-                onChange={(e) => onChange(block.index, 'slotDurationMinutes', parseInt(e.target.value))}
-                className="input text-sm"
-            >
-                {slotOptions.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-            </select>
-        </div>
-        <div className="flex items-end">
-            <button type="button" onClick={onRemove} className="btn btn-secondary text-sm w-full py-2">
-                Quitar
-            </button>
-        </div>
-    </div>
-);
+    );
+};
 
 /**
  * Component for configuring professional availability
