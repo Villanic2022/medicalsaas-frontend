@@ -93,7 +93,7 @@ const ProfessionalsPage = () => {
                 specialtyId: professional.specialty?.id || '',
                 active: professional.active,
                 privateConsultationPrice: professional.privateConsultationPrice || '',
-                acceptedInsurances: professional.acceptedInsurances || []
+                acceptedInsurances: (professional.acceptedInsurances || []).map(i => i.id)
             });
 
             // Load availability for existing professional
@@ -140,7 +140,7 @@ const ProfessionalsPage = () => {
     const handleInsuranceChange = (insuranceId, isChecked) => {
         setFormData(prev => ({
             ...prev,
-            acceptedInsurances: isChecked 
+            acceptedInsurances: isChecked
                 ? [...prev.acceptedInsurances, insuranceId]
                 : prev.acceptedInsurances.filter(id => id !== insuranceId)
         }));
