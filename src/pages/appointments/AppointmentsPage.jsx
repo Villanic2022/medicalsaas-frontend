@@ -269,11 +269,13 @@ const AppointmentsPage = () => {
             const startDateTime = `${formData.date}T${formData.time}:00`;
 
             const payload = {
-                professionalId: formData.professionalId,
+                professionalId: Number(formData.professionalId), // Ensure it is a number
                 startDateTime: startDateTime,
                 notes: formData.notes,
                 patient: formData.patient
             };
+
+            console.log('Creating appointment with payload:', payload);
 
             // Get tenantSlug securely
             let currentTenantSlug = user?.tenantSlug || localStorage.getItem('tenant_slug');
@@ -281,6 +283,8 @@ const AppointmentsPage = () => {
                 alert('Error: No se identificó el consultorio. Recarga la página.');
                 return;
             }
+
+            console.log('Tenant Slug:', currentTenantSlug);
 
             await appointmentsService.create(currentTenantSlug, payload);
             setIsCreateModalOpen(false);
@@ -293,9 +297,11 @@ const AppointmentsPage = () => {
                 notes: '',
                 patient: { firstName: '', lastName: '', dni: '', email: '', phone: '', insuranceName: '', insuranceNumber: '' }
             });
+            alert('¡Turno creado exitosamente!');
         } catch (err) {
             console.error('Error creating appointment:', err);
-            alert('Error al crear el turno. Verifica los datos.');
+            const errorMessage = err.response?.data?.message || err.message || 'Error desconocido';
+            alert(`Error al crear el turno: ${errorMessage}`);
         } finally {
             setCreateLoading(false);
         }
@@ -334,16 +340,96 @@ const AppointmentsPage = () => {
         );
     };
 
+    // Availability Modal State
+    const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false);
+    const [selectedAvailabilityProfId, setSelectedAvailabilityProfId] = useState('');
+    const [availabilityRules, setAvailabilityRules] = useState([]);
+    const [loadingAvailability, setLoadingAvailability] = useState(false);
+
+    // Fetch availability when professional is selected in the new modal
+    useEffect(() => {
+        if (selectedAvailabilityProfId) {
+            fetchAvailabilityRules(selectedAvailabilityProfId);
+        } else {
+            setAvailabilityRules([]);
+        }
+    }, [selectedAvailabilityProfId]);
+
+    const fetchAvailabilityRules = async (profId) => {
+        setLoadingAvailability(true);
+        try {
+            const rules = await professionalsService.getAvailability(profId);
+            setAvailabilityRules(rules || []);
+        } catch (err) {
+            console.error('Error fetching availability:', err);
+            setAvailabilityRules([]);
+        } finally {
+            setLoadingAvailability(false);
+        }
+    };
+
+    // Helper to generate slots
+    const generateTimeSlots = (start, end, duration = 30) => {
+        const slots = [];
+        const [startHour, startMin] = start.split(':').map(Number);
+        const [endHour, endMin] = end.split(':').map(Number);
+
+        let currentTime = startHour * 60 + startMin;
+        const endTime = endHour * 60 + endMin;
+
+        while (currentTime + duration <= endTime) {
+            const hours = Math.floor(currentTime / 60);
+            const minutes = currentTime % 60;
+            const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+            slots.push(timeString);
+            currentTime += duration;
+        }
+        return slots;
+    };
+
+    const handleQuickSchedule = (profId, time) => {
+        setIsAvailabilityModalOpen(false);
+        setFormData(prev => ({
+            ...prev,
+            professionalId: profId,
+            time: time || ''
+        }));
+        setIsCreateModalOpen(true);
+    };
+
+    // Helper to format days
+    const translateDay = (day) => {
+        const map = {
+            'MONDAY': 'Lunes',
+            'TUESDAY': 'Martes',
+            'WEDNESDAY': 'Miércoles',
+            'THURSDAY': 'Jueves',
+            'FRIDAY': 'Viernes',
+            'SATURDAY': 'Sábado',
+            'SUNDAY': 'Domingo'
+        };
+        return map[day] || day;
+    };
+
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-gray-800">Gestión de Turnos</h1>
-                <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="btn btn-primary"
-                >
-                    + Nuevo Turno
-                </button>
+                <div className="flex space-x-2">
+                    <button
+                        onClick={() => setIsAvailabilityModalOpen(true)}
+                        className="btn bg-teal-100 text-teal-700 hover:bg-teal-200 border-teal-200"
+                    >
+                        📅 Ver Disponibilidad
+                    </button>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="btn btn-primary"
+                    >
+                        + Nuevo Turno
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -545,6 +631,117 @@ const AppointmentsPage = () => {
                     </table>
                 )}
             </div>
+
+            {/* Quick Availability Modal */}
+            {isAvailabilityModalOpen && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="flex items-center justify-center min-h-screen px-4">
+                        <div className="fixed inset-0 bg-gray-500 opacity-75" onClick={() => setIsAvailabilityModalOpen(false)}></div>
+                        <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg w-full z-50 p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-gray-900">Disponibilidad Profesional</h3>
+                                <button onClick={() => setIsAvailabilityModalOpen(false)} className="text-gray-400 hover:text-gray-500">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionar Profesional</label>
+                                <select
+                                    className="input w-full"
+                                    value={selectedAvailabilityProfId}
+                                    onChange={(e) => setSelectedAvailabilityProfId(e.target.value)}
+                                >
+                                    <option value="">Seleccione...</option>
+                                    {professionals.map(p => (
+                                        <option key={p.id} value={p.id}>{p.fullName}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="min-h-[200px] border rounded-lg bg-gray-50 p-4 max-h-[60vh] overflow-y-auto">
+                                {!selectedAvailabilityProfId ? (
+                                    <p className="text-center text-gray-500 mt-10">Selecciona un profesional para ver sus horarios.</p>
+                                ) : loadingAvailability ? (
+                                    <div className="flex justify-center mt-10"><div className="loader">Cargando...</div></div>
+                                ) : availabilityRules.length === 0 ? (
+                                    <p className="text-center text-gray-500 mt-10">El profesional no tiene horarios configurados.</p>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {/* Weekly Rules */}
+                                        {availabilityRules.some(r => !r.specificDate) && (
+                                            <div>
+                                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Horarios Habituales</h4>
+                                                <div className="space-y-4">
+                                                    {availabilityRules
+                                                        .filter(r => !r.specificDate)
+                                                        .sort((a, b) => {
+                                                            const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+                                                            return days.indexOf(a.dayOfWeek) - days.indexOf(b.dayOfWeek);
+                                                        })
+                                                        .map((rule, idx) => (
+                                                            <div key={`weekly-${idx}`} className="bg-white p-3 rounded-md border border-gray-200 shadow-sm">
+                                                                <div className="font-medium text-gray-800 mb-2">
+                                                                    <span className="text-blue-600">{translateDay(rule.dayOfWeek)}</span>
+                                                                    <span className="text-xs text-gray-500 ml-2">({rule.startTime} - {rule.endTime})</span>
+                                                                </div>
+                                                                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                                                                    {generateTimeSlots(rule.startTime, rule.endTime, rule.slotDurationMinutes || 30).map((time, tIdx) => (
+                                                                        <button
+                                                                            key={tIdx}
+                                                                            onClick={() => handleQuickSchedule(selectedAvailabilityProfId, time)}
+                                                                            className="px-2 py-1 bg-white border border-teal-300 text-teal-700 rounded hover:bg-teal-500 hover:text-white hover:border-teal-500 transition-all text-xs font-medium"
+                                                                        >
+                                                                            {time}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Specific Date Rules */}
+                                        {availabilityRules.some(r => r.specificDate) && (
+                                            <div>
+                                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 mt-4">Fechas Específicas / Excepciones</h4>
+                                                <div className="space-y-4">
+                                                    {availabilityRules
+                                                        .filter(r => r.specificDate)
+                                                        .sort((a, b) => new Date(a.specificDate) - new Date(b.specificDate))
+                                                        .map((rule, idx) => (
+                                                            <div key={`specific-${idx}`} className="bg-white p-3 rounded-md border border-purple-200 shadow-sm">
+                                                                <div className="font-medium text-gray-800 mb-2">
+                                                                    <span className="text-purple-600">📅 {format(new Date(rule.specificDate + 'T00:00:00'), 'dd/MM/yyyy')}</span>
+                                                                    <span className="text-xs text-gray-500 ml-2">({rule.startTime} - {rule.endTime})</span>
+                                                                </div>
+                                                                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                                                                    {generateTimeSlots(rule.startTime, rule.endTime, rule.slotDurationMinutes || 30).map((time, tIdx) => (
+                                                                        <button
+                                                                            key={tIdx}
+                                                                            onClick={() => handleQuickSchedule(selectedAvailabilityProfId, time)}
+                                                                            className="px-2 py-1 bg-white border border-purple-300 text-purple-700 rounded hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all text-xs font-medium"
+                                                                        >
+                                                                            {time}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
             {/* Create Modal */}
             {
