@@ -51,10 +51,6 @@ export const create = async (patientData) => {
     return response.data;
 };
 
-/**
- * Update existing patient
- * PUT /patients/{id}
- */
 export const update = async (id, patientData) => {
     const response = await axiosInstance.put(`/patients/${id}`, patientData);
     return response.data;
@@ -69,6 +65,66 @@ export const remove = async (id) => {
     return response.data;
 };
 
+// --- CLINICAL HISTORY & FILES ENDPOINTS ---
+
+/**
+ * Get clinical history (notes/visits)
+ * GET /patients/{id}/clinical-history
+ */
+export const getClinicalHistory = async (patientId) => {
+    const response = await axiosInstance.get(`/patients/${patientId}/clinical-history`);
+    return response.data;
+};
+
+/**
+ * Add clinical note
+ * POST /patients/{id}/clinical-history
+ */
+export const addClinicalHistory = async (patientId, noteData) => {
+    const response = await axiosInstance.post(`/patients/${patientId}/clinical-history`, noteData);
+    return response.data;
+};
+
+/**
+ * Delete clinical note
+ * DELETE /patients/{id}/clinical-history/{noteId}
+ */
+export const deleteClinicalHistory = async (patientId, noteId) => {
+    const response = await axiosInstance.delete(`/patients/${patientId}/clinical-history/${noteId}`);
+    return response.data;
+};
+
+/**
+ * Get patient files
+ * GET /patients/{id}/files
+ */
+export const getFiles = async (patientId) => {
+    const response = await axiosInstance.get(`/patients/${patientId}/files`);
+    return response.data;
+};
+
+/**
+ * Upload file
+ * POST /patients/{id}/files
+ */
+export const uploadFile = async (patientId, formData) => {
+    const response = await axiosInstance.post(`/patients/${patientId}/files`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+    return response.data;
+};
+
+/**
+ * Delete patient file
+ * DELETE /patients/{id}/files/{fileId}
+ */
+export const deleteFile = async (patientId, fileId) => {
+    const response = await axiosInstance.delete(`/patients/${patientId}/files/${fileId}`);
+    return response.data;
+};
+
 export default {
     getAll,
     getById,
@@ -76,5 +132,11 @@ export default {
     search,
     create,
     update,
-    delete: remove
+    delete: remove,
+    getClinicalHistory,
+    addClinicalHistory,
+    deleteClinicalHistory,
+    getFiles,
+    uploadFile,
+    deleteFile
 };

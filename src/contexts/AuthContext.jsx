@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-import * as authService from '../api/authService';
+import { login, registerOwner, registerStaff, registerProfessional, logout } from '../api/authService';
 import { STORAGE_KEYS, ROLES } from '../utils/constants';
 
 const AuthContext = createContext(null);
@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }) => {
      */
     const loginUser = async (email, password) => {
         try {
-            const data = await authService.login(email, password);
+            const data = await login(email, password);
 
             // Guardar token y refresh token
             localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
@@ -48,7 +48,8 @@ export const AuthProvider = ({ children }) => {
                 lastName: data.user?.lastName || data.lastName,
                 role: data.user?.role || data.role,
                 tenantId: data.user?.tenantId || data.tenantId,
-                tenantSlug: data.user?.tenantSlug || data.tenantSlug
+                tenantSlug: data.user?.tenantSlug || data.tenantSlug,
+                professionalId: data.user?.professionalId || data.professionalId || data.professional?.id
             };
 
             localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
@@ -76,7 +77,7 @@ export const AuthProvider = ({ children }) => {
      */
     const registerOwnerAccount = async (formData) => {
         try {
-            const data = await authService.registerOwner(formData);
+            const data = await registerOwner(formData);
 
             // Después del registro, hacer login automático si el backend lo retorna
             if (data.token) {
@@ -92,7 +93,8 @@ export const AuthProvider = ({ children }) => {
                     lastName: data.user?.lastName || data.lastName,
                     role: data.user?.role || ROLES.OWNER,
                     tenantId: data.user?.tenantId || data.tenantId,
-                    tenantSlug: data.user?.tenantSlug || data.tenantSlug
+                    tenantSlug: data.user?.tenantSlug || data.tenantSlug,
+                    professionalId: data.user?.professionalId || data.professionalId || data.professional?.id
                 };
 
                 localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
@@ -120,7 +122,7 @@ export const AuthProvider = ({ children }) => {
      */
     const registerStaffAccount = async (formData) => {
         try {
-            const data = await authService.registerStaff(formData);
+            const data = await registerStaff(formData);
 
             // Después del registro, hacer login automático si el backend lo retorna
             if (data.token) {
@@ -136,7 +138,8 @@ export const AuthProvider = ({ children }) => {
                     lastName: data.user?.lastName || data.lastName,
                     role: data.user?.role || ROLES.STAFF,
                     tenantId: data.user?.tenantId || data.tenantId,
-                    tenantSlug: data.user?.tenantSlug || data.tenantSlug
+                    tenantSlug: data.user?.tenantSlug || data.tenantSlug,
+                    professionalId: data.user?.professionalId || data.professionalId || data.professional?.id
                 };
 
                 localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
@@ -160,11 +163,56 @@ export const AuthProvider = ({ children }) => {
     };
 
     /**
+     * Registro de Profesional
+     */
+    const registerProfessionalAccount = async (formData) => {
+        try {
+            const data = await registerProfessional(formData);
+
+            // Después del registro, hacer login automático si el backend lo retorna
+            if (data.token) {
+                localStorage.setItem(STORAGE_KEYS.TOKEN, data.token);
+                if (data.refreshToken) {
+                    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refreshToken);
+                }
+
+                const userData = {
+                    id: data.user?.id || data.id,
+                    email: data.user?.email || data.email,
+                    firstName: data.user?.firstName || data.firstName,
+                    lastName: data.user?.lastName || data.lastName,
+                    role: data.user?.role || ROLES.PROFESSIONAL,
+                    tenantId: data.user?.tenantId || data.tenantId,
+                    tenantSlug: data.user?.tenantSlug || data.tenantSlug,
+                    professionalId: data.user?.professionalId || data.professionalId || data.professional?.id
+                };
+
+                localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
+
+                if (userData.tenantId) {
+                    localStorage.setItem(STORAGE_KEYS.TENANT_ID, userData.tenantId);
+                }
+                if (userData.tenantSlug) {
+                    localStorage.setItem(STORAGE_KEYS.TENANT_SLUG, userData.tenantSlug);
+                }
+
+                setToken(data.token);
+                setUser(userData);
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Register professional error:', error);
+            throw error;
+        }
+    };
+
+    /**
      * Logout
      */
     const logoutUser = async () => {
         try {
-            await authService.logout();
+            await logout();
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
@@ -191,6 +239,7 @@ export const AuthProvider = ({ children }) => {
         const roleHierarchy = {
             [ROLES.ADMIN]: 3,
             [ROLES.OWNER]: 2,
+            [ROLES.PROFESSIONAL]: 2, // Igual nivel que OWNER para esto
             [ROLES.STAFF]: 1
         };
 
@@ -206,6 +255,7 @@ export const AuthProvider = ({ children }) => {
         logout: logoutUser,
         registerOwner: registerOwnerAccount,
         registerStaff: registerStaffAccount,
+        registerProfessional: registerProfessionalAccount,
         hasRole,
         hasMinRole
     };

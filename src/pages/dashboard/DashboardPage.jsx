@@ -1,10 +1,50 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROLES } from '../../utils/constants';
+import appointmentsService from '../../api/appointmentsService';
+import { format } from 'date-fns';
 
 const DashboardPage = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+
+    const [todayStats, setTodayStats] = useState({ loading: true, total: 0, byProfessional: {}, error: null });
+
+    useEffect(() => {
+        const fetchTodayStats = async () => {
+            try {
+                // Fetch all appointments (or filter by date if API supports it efficiently)
+                // For now, fetching all and filtering client-side for "Today"
+                const allAppointments = await appointmentsService.getAll();
+
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                const todayAppointments = allAppointments.filter(appt =>
+                    appt.startDateTime.startsWith(todayStr) && appt.status !== 'CANCELLED'
+                );
+
+                const byProf = {};
+                todayAppointments.forEach(appt => {
+                    const profName = appt.professional?.fullName || 'Sin Asignar';
+                    byProf[profName] = (byProf[profName] || 0) + 1;
+                });
+
+                setTodayStats({
+                    loading: false,
+                    total: todayAppointments.length,
+                    byProfessional: byProf,
+                    error: null
+                });
+            } catch (err) {
+                console.error("Error fetching dashboard stats:", err);
+                setTodayStats({ loading: false, total: 0, byProfessional: {}, error: "No se pudieron cargar los datos de hoy." });
+            }
+        };
+
+        if (user?.tenantSlug) {
+            fetchTodayStats();
+        }
+    }, [user]);
 
     return (
         <div>
@@ -41,6 +81,59 @@ const DashboardPage = () => {
                         )}
                     </div>
                 </div>
+            </div>
+
+            {/* Resumen del Día */}
+            <div className="card p-6 mb-6 bg-white border-l-4 border-teal-500 shadow-md">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span className="text-2xl mr-2">📅</span> Estado de Hoy
+                </h2>
+
+                {todayStats.loading ? (
+                    <div className="animate-pulse flex space-x-4">
+                        <div className="flex-1 space-y-4 py-1">
+                            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                            <div className="space-y-2">
+                                <div className="h-4 bg-gray-200 rounded"></div>
+                                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                            </div>
+                        </div>
+                    </div>
+                ) : todayStats.error ? (
+                    <div className="text-red-500 text-sm">{todayStats.error}</div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="flex items-center">
+                            <div className="p-3 rounded-full bg-teal-100 text-teal-600 mr-4">
+                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="text-gray-500 text-sm font-medium uppercase tracking-wide">Total Turnos Hoy</p>
+                                <p className="text-3xl font-bold text-gray-900">{todayStats.total}</p>
+                            </div>
+                        </div>
+
+                        <div className="border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6">
+                            <p className="text-sm font-medium text-gray-500 mb-2 uppercase tracking-wide">Por Profesional</p>
+                            {Object.keys(todayStats.byProfessional).length === 0 ? (
+                                <p className="text-gray-400 italic text-sm">No hay turnos programados.</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {Object.entries(todayStats.byProfessional).map(([name, count]) => (
+                                        <li key={name} className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-700 font-medium">{name}</span>
+                                            <span className="bg-teal-50 text-teal-700 py-0.5 px-2.5 rounded-full text-xs font-bold border border-teal-100">
+                                                {count}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Link público para pacientes (Solo OWNER) */}

@@ -106,9 +106,25 @@ export const resetPassword = async (token, newPassword, confirmPassword) => {
     return response.data;
 };
 
+/**
+ * Registro de profesional en consultorio existente
+ * POST /auth/register/professional
+ */
+export const registerProfessional = async (data) => {
+    const response = await axiosInstance.post('/auth/register/professional', {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        password: data.password,
+        tenantSlug: data.tenantSlug
+    });
+    return response.data;
+};
+
 export default {
     registerOwner,
     registerStaff,
+    registerProfessional,
     login,
     refreshToken,
     logout,

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Added for consistency if needed, though mostly using state
 import { useAuth } from '../../contexts/AuthContext';
 import appointmentsService from '../../api/appointmentsService';
-import professionalsService from '../../api/professionalsService'; // We need this for the dropdown
-import { format } from 'date-fns';
+import professionalsService from '../../api/professionalsService';
+import { format, addDays, startOfWeek, isSameDay, parseISO, startOfDay, addMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
+import Toast from '../../components/ui/Toast';
 
 const AppointmentsPage = () => {
     const { user } = useAuth();
@@ -11,10 +13,18 @@ const AppointmentsPage = () => {
     const [professionals, setProfessionals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [toast, setToast] = useState(null); // { message, type }
 
     // Modal State
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [createLoading, setCreateLoading] = useState(false);
+
+    // Availability Modal State
+    const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false);
+    const [selectedAvailabilityProfId, setSelectedAvailabilityProfId] = useState('');
+    const [availabilityRules, setAvailabilityRules] = useState([]);
+    const [loadingAvailability, setLoadingAvailability] = useState(false);
+    const [availabilityViewDate, setAvailabilityViewDate] = useState(new Date()); // Controls the visible week
 
     // Form State
     const [formData, setFormData] = useState({
@@ -38,10 +48,26 @@ const AppointmentsPage = () => {
     const [profFilter, setProfFilter] = useState('');
     const [whatsappFilter, setWhatsappFilter] = useState('PENDING'); // 'ALL', 'PENDING', 'SENT'
 
-    // Available Slots State
-    const [selectedProfAvailability, setSelectedProfAvailability] = useState([]);
+    // Available Slots State (Main View)
     const [availableSlots, setAvailableSlots] = useState([]);
     const [loadingSlots, setLoadingSlots] = useState(false);
+
+    // ... (keep getGreeting, generateWhatsAppLink, handleWhatsAppClick) ...
+    // Note: I will need to replace the content of the file from line 46 down to where the modal was to ensure context is kept, 
+    // but the instruction says "Replace the content of the Availability Modal". 
+    // To be safe and since I can't see the middle lines in the previous view, I will try to target the Modal section specifically if possible, 
+    // or use a larger range if I am replacing the whole file logic for imports.
+    // Given the 'replace_file_content' limitations, I will stick to what I can see or just rewrite the modal part if I can target it.
+    // However, I need to add imports at the top and state near the top.
+
+    // I will rewrite the component start to include imports and state, then I will use a separate call or a large chunk for the modal if needed.
+    // Wait, I can only do contiguous edits.
+    // I will rewrite the top of the file to include imports and state.
+    // Then I will rewrite the Modal section.
+
+    // Actually, I'll assume the user wants the implementation.
+    // I will use `replace_file_content` for the imports/top section first.
+
 
     // Smart Greeting Logic
     const getGreeting = () => {
@@ -207,7 +233,19 @@ const AppointmentsPage = () => {
                 appointmentsService.getAll(),
                 professionalsService.getAll()
             ]);
-            setAppointments(fetchedAppointments);
+
+            // Si es PROFESIONAL, filtrar solo sus turnos
+            if (user?.role === 'PROFESSIONAL') {
+                const profId = user.professionalId || user.id;
+                const filteredAppts = fetchedAppointments.filter(appt =>
+                    appt.professional?.id === profId || appt.professionalId === profId
+                );
+                setAppointments(filteredAppts);
+                setProfFilter(profId.toString());
+            } else {
+                setAppointments(fetchedAppointments);
+            }
+
             setProfessionals(fetchedProfessionals);
         } catch (err) {
             console.error('Error loading data:', err);
@@ -225,7 +263,7 @@ const AppointmentsPage = () => {
             fetchData(); // Reload list
         } catch (err) {
             console.error('Error updating status:', err);
-            alert('Error al actualizar el estado.');
+            setToast({ message: 'Error al actualizar el estado.', type: 'error' });
         }
     };
 
@@ -237,7 +275,7 @@ const AppointmentsPage = () => {
             fetchData();
         } catch (err) {
             console.error('Error cancelling appointment:', err);
-            alert('Error al cancelar el turno.');
+            setToast({ message: 'Error al cancelar el turno.', type: 'error' });
         }
     };
 
@@ -280,7 +318,7 @@ const AppointmentsPage = () => {
             // Get tenantSlug securely
             let currentTenantSlug = user?.tenantSlug || localStorage.getItem('tenant_slug');
             if (!currentTenantSlug) {
-                alert('Error: No se identificó el consultorio. Recarga la página.');
+                setToast({ message: 'Error: No se identificó el consultorio. Recarga la página.', type: 'error' });
                 return;
             }
 
@@ -297,11 +335,11 @@ const AppointmentsPage = () => {
                 notes: '',
                 patient: { firstName: '', lastName: '', dni: '', email: '', phone: '', insuranceName: '', insuranceNumber: '' }
             });
-            alert('¡Turno creado exitosamente!');
+            setToast({ message: '¡Turno creado exitosamente! 🚀', type: 'success' });
         } catch (err) {
             console.error('Error creating appointment:', err);
             const errorMessage = err.response?.data?.message || err.message || 'Error desconocido';
-            alert(`Error al crear el turno: ${errorMessage}`);
+            setToast({ message: `Error al crear el turno: ${errorMessage}`, type: 'error' });
         } finally {
             setCreateLoading(false);
         }
@@ -340,11 +378,7 @@ const AppointmentsPage = () => {
         );
     };
 
-    // Availability Modal State
-    const [isAvailabilityModalOpen, setIsAvailabilityModalOpen] = useState(false);
-    const [selectedAvailabilityProfId, setSelectedAvailabilityProfId] = useState('');
-    const [availabilityRules, setAvailabilityRules] = useState([]);
-    const [loadingAvailability, setLoadingAvailability] = useState(false);
+
 
     // Fetch availability when professional is selected in the new modal
     useEffect(() => {
@@ -387,28 +421,58 @@ const AppointmentsPage = () => {
         return slots;
     };
 
-    const handleQuickSchedule = (profId, time) => {
+    const handleQuickSchedule = (profId, dateStr, time) => {
         setIsAvailabilityModalOpen(false);
         setFormData(prev => ({
             ...prev,
             professionalId: profId,
+            date: dateStr,
             time: time || ''
         }));
         setIsCreateModalOpen(true);
     };
 
-    // Helper to format days
-    const translateDay = (day) => {
-        const map = {
-            'MONDAY': 'Lunes',
-            'TUESDAY': 'Martes',
-            'WEDNESDAY': 'Miércoles',
-            'THURSDAY': 'Jueves',
-            'FRIDAY': 'Viernes',
-            'SATURDAY': 'Sábado',
-            'SUNDAY': 'Domingo'
-        };
-        return map[day] || day;
+    // --- Calendar helpers ---
+    const getCalendarDays = (baseDate) => {
+        const start = startOfWeek(baseDate, { weekStartsOn: 1 }); // Monday
+        return Array.from({ length: 7 }).map((_, i) => addDays(start, i));
+    };
+
+    const isSlotOccupied = (dateStr, timeStr, profId) => {
+        // Find if there is an appointment for this professional, date, and time
+        // Note: appt.startDateTime is usually "YYYY-MM-DDTHH:mm:ss"
+        // dateStr is "YYYY-MM-DD"
+        // timeStr is "HH:mm"
+        return appointments.some(appt => {
+            if (appt.status === 'CANCELLED') return false;
+            // Check professional
+            if (appt.professional?.id != profId) return false; // loose equality for string/number
+
+            // Check date/time overlap
+            // Simplest: Check exact match of start time
+            // Ideally should check duration overlap, but let's stick to start time for now
+            const apptStart = appt.startDateTime; // ISO String
+            const slotIso = `${dateStr}T${timeStr}`;
+
+            return apptStart.startsWith(slotIso);
+        });
+    };
+
+    const getRulesForDay = (date, rules) => {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        // 1. Specific Date Rule?
+
+        // 1. Specific Date Rules? - If any specific rule exists for this date, it overrides weekly rules completely? 
+        // Or do we merge? Usually specific rules override weekly schedule for that specific day.
+        // Let's assume OVERRIDE behavior for now (if I set a specific date, I want that to be THE schedule).
+        const specificRules = rules.filter(r => r.specificDate === dateStr);
+        if (specificRules.length > 0) return specificRules;
+
+        // 2. Weekly Rules?
+        const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+        const dayKey = days[date.getDay()];
+
+        return rules.filter(r => !r.specificDate && r.dayOfWeek === dayKey);
     };
 
 
@@ -418,13 +482,24 @@ const AppointmentsPage = () => {
                 <h1 className="text-2xl font-bold text-gray-800">Gestión de Turnos</h1>
                 <div className="flex space-x-2">
                     <button
-                        onClick={() => setIsAvailabilityModalOpen(true)}
+                        onClick={() => {
+                            if (user?.role === 'PROFESSIONAL') {
+                                setSelectedAvailabilityProfId((user.professionalId || user.id).toString());
+                            }
+                            setAvailabilityViewDate(new Date());
+                            setIsAvailabilityModalOpen(true);
+                        }}
                         className="btn bg-teal-100 text-teal-700 hover:bg-teal-200 border-teal-200"
                     >
                         📅 Ver Disponibilidad
                     </button>
                     <button
-                        onClick={() => setIsCreateModalOpen(true)}
+                        onClick={() => {
+                            if (user?.role === 'PROFESSIONAL') {
+                                setFormData(prev => ({ ...prev, professionalId: (user.professionalId || user.id).toString() }));
+                            }
+                            setIsCreateModalOpen(true);
+                        }}
                         className="btn btn-primary"
                     >
                         + Nuevo Turno
@@ -449,8 +524,9 @@ const AppointmentsPage = () => {
                         value={profFilter}
                         onChange={(e) => setProfFilter(e.target.value)}
                         className="input text-sm py-1.5 w-full sm:w-64"
+                        disabled={user?.role === 'PROFESSIONAL'}
                     >
-                        <option value="">Todos los profesionales</option>
+                        {user?.role !== 'PROFESSIONAL' && <option value="">Todos los profesionales</option>}
                         {professionals.map(p => (
                             <option key={p.id} value={p.id}>
                                 {p.firstName} {p.lastName} {p.specialty ? `(${p.specialty.name})` : ''}
@@ -480,7 +556,7 @@ const AppointmentsPage = () => {
                 )}
             </div>
 
-            {/* Available Slots Panel */}
+            {/* Available Slots Panel - MAIN SCREEN (kept as is) */}
             {profFilter && dateFilter && (
                 <div className="bg-gradient-to-br from-teal-50 to-white p-6 rounded-lg shadow-sm border-2 border-teal-200">
                     <div className="flex items-center justify-between mb-4">
@@ -632,14 +708,15 @@ const AppointmentsPage = () => {
                 )}
             </div>
 
-            {/* Quick Availability Modal */}
+            {/* Quick Availability Modal - REPLACED with Calendar View */}
             {isAvailabilityModalOpen && (
                 <div className="fixed inset-0 z-50 overflow-y-auto">
                     <div className="flex items-center justify-center min-h-screen px-4">
                         <div className="fixed inset-0 bg-gray-500 opacity-75" onClick={() => setIsAvailabilityModalOpen(false)}></div>
-                        <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg w-full z-50 p-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-bold text-gray-900">Disponibilidad Profesional</h3>
+                        <div className="bg-white rounded-lg overflow-hidden shadow-xl transform transition-all w-full max-w-5xl z-50 p-6 max-h-[90vh] flex flex-col">
+                            {/* Header */}
+                            <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                                <h3 className="text-lg font-bold text-gray-900">Agenda Semanal</h3>
                                 <button onClick={() => setIsAvailabilityModalOpen(false)} className="text-gray-400 hover:text-gray-500">
                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -647,93 +724,128 @@ const AppointmentsPage = () => {
                                 </button>
                             </div>
 
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Seleccionar Profesional</label>
-                                <select
-                                    className="input w-full"
-                                    value={selectedAvailabilityProfId}
-                                    onChange={(e) => setSelectedAvailabilityProfId(e.target.value)}
-                                >
-                                    <option value="">Seleccione...</option>
-                                    {professionals.map(p => (
-                                        <option key={p.id} value={p.id}>{p.fullName}</option>
-                                    ))}
-                                </select>
+                            {/* Controls */}
+                            <div className="flex flex-col sm:flex-row justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4 gap-4 flex-shrink-0">
+                                <div className="w-full sm:w-1/3">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">Profesional</label>
+                                    <select
+                                        className="input w-full mt-1"
+                                        value={selectedAvailabilityProfId}
+                                        onChange={(e) => setSelectedAvailabilityProfId(e.target.value)}
+                                    >
+                                        <option value="">Seleccione...</option>
+                                        {professionals.map(p => (
+                                            <option key={p.id} value={p.id}>{p.fullName}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <button
+                                        onClick={() => setAvailabilityViewDate(prev => addDays(prev, -7))}
+                                        className="p-2 hover:bg-gray-200 rounded-full text-gray-600"
+                                        title="Semana Anterior"
+                                    >
+                                        ◀
+                                    </button>
+                                    <div className="text-center">
+                                        <span className="block font-bold text-gray-800">
+                                            {format(startOfWeek(availabilityViewDate, { weekStartsOn: 1 }), 'MMMM yyyy', { locale: es }).toUpperCase()}
+                                        </span>
+                                        <span className="text-xs text-gray-500">
+                                            Semana del {format(startOfWeek(availabilityViewDate, { weekStartsOn: 1 }), 'dd')}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => setAvailabilityViewDate(prev => addDays(prev, 7))}
+                                        className="p-2 hover:bg-gray-200 rounded-full text-gray-600"
+                                        title="Semana Siguiente"
+                                    >
+                                        ▶
+                                    </button>
+                                </div>
+                                <div className="w-full sm:w-1/3 text-right">
+                                    <button
+                                        onClick={() => setAvailabilityViewDate(new Date())}
+                                        className="text-xs text-teal-600 font-medium hover:underline"
+                                    >
+                                        Ir a Hoy
+                                    </button>
+                                </div>
                             </div>
 
-                            <div className="min-h-[200px] border rounded-lg bg-gray-50 p-4 max-h-[60vh] overflow-y-auto">
+                            {/* Calendar Grid */}
+                            <div className="flex-1 overflow-auto min-h-[300px]">
                                 {!selectedAvailabilityProfId ? (
-                                    <p className="text-center text-gray-500 mt-10">Selecciona un profesional para ver sus horarios.</p>
+                                    <div className="h-full flex items-center justify-center text-gray-500">
+                                        Selecciona un profesional para ver su agenda.
+                                    </div>
                                 ) : loadingAvailability ? (
-                                    <div className="flex justify-center mt-10"><div className="loader">Cargando...</div></div>
-                                ) : availabilityRules.length === 0 ? (
-                                    <p className="text-center text-gray-500 mt-10">El profesional no tiene horarios configurados.</p>
+                                    <div className="h-full flex items-center justify-center">
+                                        <div className="loader text-teal-500">Cargando...</div>
+                                    </div>
                                 ) : (
-                                    <div className="space-y-4">
-                                        {/* Weekly Rules */}
-                                        {availabilityRules.some(r => !r.specificDate) && (
-                                            <div>
-                                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Horarios Habituales</h4>
-                                                <div className="space-y-4">
-                                                    {availabilityRules
-                                                        .filter(r => !r.specificDate)
-                                                        .sort((a, b) => {
-                                                            const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-                                                            return days.indexOf(a.dayOfWeek) - days.indexOf(b.dayOfWeek);
-                                                        })
-                                                        .map((rule, idx) => (
-                                                            <div key={`weekly-${idx}`} className="bg-white p-3 rounded-md border border-gray-200 shadow-sm">
-                                                                <div className="font-medium text-gray-800 mb-2">
-                                                                    <span className="text-blue-600">{translateDay(rule.dayOfWeek)}</span>
-                                                                    <span className="text-xs text-gray-500 ml-2">({rule.startTime} - {rule.endTime})</span>
-                                                                </div>
-                                                                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                                                                    {generateTimeSlots(rule.startTime, rule.endTime, rule.slotDurationMinutes || 30).map((time, tIdx) => (
-                                                                        <button
-                                                                            key={tIdx}
-                                                                            onClick={() => handleQuickSchedule(selectedAvailabilityProfId, time)}
-                                                                            className="px-2 py-1 bg-white border border-teal-300 text-teal-700 rounded hover:bg-teal-500 hover:text-white hover:border-teal-500 transition-all text-xs font-medium"
-                                                                        >
-                                                                            {time}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="grid grid-cols-7 gap-2 min-w-[800px]">
+                                        {getCalendarDays(availabilityViewDate).map((date, idx) => {
+                                            const rules = getRulesForDay(date, availabilityRules);
+                                            const dateStr = format(date, 'yyyy-MM-dd');
+                                            const isToday = isSameDay(date, new Date());
 
-                                        {/* Specific Date Rules */}
-                                        {availabilityRules.some(r => r.specificDate) && (
-                                            <div>
-                                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 mt-4">Fechas Específicas / Excepciones</h4>
-                                                <div className="space-y-4">
-                                                    {availabilityRules
-                                                        .filter(r => r.specificDate)
-                                                        .sort((a, b) => new Date(a.specificDate) - new Date(b.specificDate))
-                                                        .map((rule, idx) => (
-                                                            <div key={`specific-${idx}`} className="bg-white p-3 rounded-md border border-purple-200 shadow-sm">
-                                                                <div className="font-medium text-gray-800 mb-2">
-                                                                    <span className="text-purple-600">📅 {format(new Date(rule.specificDate + 'T00:00:00'), 'dd/MM/yyyy')}</span>
-                                                                    <span className="text-xs text-gray-500 ml-2">({rule.startTime} - {rule.endTime})</span>
-                                                                </div>
-                                                                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-                                                                    {generateTimeSlots(rule.startTime, rule.endTime, rule.slotDurationMinutes || 30).map((time, tIdx) => (
-                                                                        <button
-                                                                            key={tIdx}
-                                                                            onClick={() => handleQuickSchedule(selectedAvailabilityProfId, time)}
-                                                                            className="px-2 py-1 bg-white border border-purple-300 text-purple-700 rounded hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all text-xs font-medium"
-                                                                        >
-                                                                            {time}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
+                                            // Process all rules for the day
+                                            let allSlots = [];
+                                            rules.forEach(rule => {
+                                                const ruleSlots = generateTimeSlots(rule.startTime, rule.endTime, rule.slotDurationMinutes || 30);
+                                                allSlots = [...allSlots, ...ruleSlots];
+                                            });
+
+                                            // Sort slots
+                                            allSlots.sort((a, b) => {
+                                                const [hA, mA] = a.split(':').map(Number);
+                                                const [hB, mB] = b.split(':').map(Number);
+                                                return (hA * 60 + mA) - (hB * 60 + mB); // simple minutes comparison
+                                            });
+                                            // Remove duplicates if overlapping rules exist (optional but good practice)
+                                            allSlots = [...new Set(allSlots)];
+
+                                            return (
+                                                <div key={idx} className={`border rounded-lg flex flex-col ${isToday ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-white'}`}>
+                                                    {/* Day Header */}
+                                                    <div className={`p-2 text-center border-b ${isToday ? 'bg-teal-100 text-teal-800' : 'bg-gray-50 text-gray-700'}`}>
+                                                        <div className="font-bold uppercase text-xs">
+                                                            {format(date, 'EEE', { locale: es })}
+                                                        </div>
+                                                        <div className="text-lg font-bold">
+                                                            {format(date, 'd')}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Slots Content */}
+                                                    <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[300px]">
+                                                        {allSlots.length > 0 ? (
+                                                            allSlots.map((time, tIdx) => {
+                                                                const isBusy = isSlotOccupied(dateStr, time, selectedAvailabilityProfId);
+                                                                return (
+                                                                    <button
+                                                                        key={tIdx}
+                                                                        disabled={isBusy}
+                                                                        onClick={() => handleQuickSchedule(selectedAvailabilityProfId, dateStr, time)}
+                                                                        className={`w-full text-xs py-1 px-2 rounded border transition-all ${isBusy
+                                                                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed line-through'
+                                                                            : 'bg-white text-teal-700 border-teal-200 hover:bg-teal-500 hover:text-white hover:border-teal-500 font-medium shadow-sm'
+                                                                            }`}
+                                                                    >
+                                                                        {time}
+                                                                    </button>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <div className="text-center text-xs text-gray-400 italic py-4">
+                                                                -
                                                             </div>
-                                                        ))}
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -741,6 +853,7 @@ const AppointmentsPage = () => {
                     </div>
                 </div>
             )}
+
 
 
             {/* Create Modal */}
@@ -754,18 +867,24 @@ const AppointmentsPage = () => {
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Profesional</label>
-                                        <select
-                                            name="professionalId"
-                                            value={formData.professionalId}
-                                            onChange={handleInputChange}
-                                            className="mt-1 input block w-full"
-                                            required
-                                        >
-                                            <option value="">Seleccione un profesional</option>
-                                            {professionals.map(p => (
-                                                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} - {p.specialty?.name}</option>
-                                            ))}
-                                        </select>
+                                        {user?.role === 'PROFESSIONAL' ? (
+                                            <div className="mt-1 p-2 bg-gray-50 border rounded-md text-sm font-medium text-gray-700">
+                                                {professionals.find(p => p.id == (user.professionalId || user.id))?.fullName || 'Registrando como vos'}
+                                            </div>
+                                        ) : (
+                                            <select
+                                                name="professionalId"
+                                                value={formData.professionalId}
+                                                onChange={handleInputChange}
+                                                className="mt-1 input block w-full"
+                                                required
+                                            >
+                                                <option value="">Seleccione un profesional</option>
+                                                {professionals.map(p => (
+                                                    <option key={p.id} value={p.id}>{p.firstName} {p.lastName} - {p.specialty?.name}</option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
@@ -809,6 +928,13 @@ const AppointmentsPage = () => {
                     </div>
                 )
             }
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div >
     );
 };

@@ -136,20 +136,20 @@ const LoginPage = () => {
                     {/* Enlaces de registro */}
                     <div className="mt-6 pt-6 border-t border-gray-200">
                         <p className="text-sm text-gray-600 text-center mb-3">
-                            ¿No tienes una cuenta?
+                            ¿No tienes una cuenta? Registrate como:
                         </p>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <Link
                                 to="/register/owner"
-                                className="btn btn-secondary text-center text-sm"
+                                className="btn btn-secondary text-center text-xs py-2 px-1"
                             >
-                                Registrar Consultorio
+                                Propietario
                             </Link>
                             <Link
                                 to="/register/staff"
-                                className="btn btn-secondary text-center text-sm"
+                                className="btn btn-secondary text-center text-xs py-2 px-1"
                             >
-                                Registrar Staff
+                                Staff / Secretaria
                             </Link>
                         </div>
                     </div>
