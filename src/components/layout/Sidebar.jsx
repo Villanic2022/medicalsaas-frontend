@@ -23,7 +23,7 @@ const Sidebar = () => {
             );
         }
 
-        if (user?.role === ROLES.OWNER || user?.role === ROLES.STAFF) {
+        if (user?.role === ROLES.OWNER || user?.role === ROLES.STAFF || user?.role === ROLES.PROFESSIONAL) {
             items.push(
                 {
                     name: 'Dashboard',
@@ -60,7 +60,7 @@ const Sidebar = () => {
             );
         }
 
-        if (user?.role === ROLES.OWNER || user?.role === ROLES.STAFF) {
+        if (user?.role === ROLES.OWNER || user?.role === ROLES.STAFF || user?.role === ROLES.PROFESSIONAL) {
             items.push(
                 {
                     name: 'Turnos',
@@ -167,6 +167,7 @@ const Sidebar = () => {
                             {user?.role === ROLES.ADMIN && 'Administrador'}
                             {user?.role === ROLES.OWNER && 'Propietario'}
                             {user?.role === ROLES.STAFF && 'Staff'}
+                            {user?.role === ROLES.PROFESSIONAL && 'Profesional'}
                         </p>
                     </div>
                 </div>

@@ -1,8 +1,8 @@
-// Roles del sistema
 export const ROLES = {
     ADMIN: 'ADMIN',
     OWNER: 'OWNER',
-    STAFF: 'STAFF'
+    STAFF: 'STAFF',
+    PROFESSIONAL: 'PROFESSIONAL'
 };
 
 // Estados de turnos
@@ -76,6 +76,14 @@ export const ROLE_PERMISSIONS = {
         'view_appointments',
         'edit_appointment',
         'view_specialties'
+    ],
+    [ROLES.PROFESSIONAL]: [
+        'view_professionals',
+        'view_appointments',
+        'edit_appointment',
+        'view_specialties',
+        'view_history',
+        'edit_history'
     ]
 };
 

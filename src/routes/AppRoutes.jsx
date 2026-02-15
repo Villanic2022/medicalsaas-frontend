@@ -14,6 +14,7 @@ import ProfessionalsPage from '../pages/professionals/ProfessionalsPage';
 import SpecialtiesPage from '../pages/specialties/SpecialtiesPage';
 import AppointmentsPage from '../pages/appointments/AppointmentsPage';
 import PatientsPage from '../pages/patients/PatientsPage';
+import PatientDetailsPage from '../pages/patients/PatientDetailsPage';
 import PublicBookingPage from '../pages/appointments/PublicBookingPage';
 import TenantsPage from '../pages/admin/TenantsPage';
 import StaffPage from '../pages/staff/StaffPage';
@@ -91,7 +92,7 @@ const AppRoutes = () => {
                         <Route
                             path="dashboard"
                             element={
-                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF]}>
+                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF, ROLES.PROFESSIONAL]}>
                                     <DashboardPage />
                                 </ProtectedRoute>
                             }
@@ -107,31 +108,39 @@ const AppRoutes = () => {
                             }
                         />
 
-                        {/* Turnos - OWNER y STAFF */}
+                        {/* Turnos - OWNER y STAFF y PROFESSIONAL */}
                         <Route
                             path="appointments"
                             element={
-                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF]}>
+                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF, ROLES.PROFESSIONAL]}>
                                     <AppointmentsPage />
                                 </ProtectedRoute>
                             }
                         />
 
-                        {/* Pacientes - OWNER y STAFF */}
+                        {/* Pacientes - OWNER y STAFF y PROFESSIONAL */}
                         <Route
                             path="patients"
                             element={
-                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF]}>
+                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF, ROLES.PROFESSIONAL]}>
                                     <PatientsPage />
                                 </ProtectedRoute>
                             }
                         />
+                        <Route
+                            path="patients/:id"
+                            element={
+                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF, ROLES.PROFESSIONAL]}>
+                                    <PatientDetailsPage />
+                                </ProtectedRoute>
+                            }
+                        />
 
-                        {/* Especialidades - OWNER y STAFF */}
+                        {/* Especialidades - OWNER y STAFF y PROFESSIONAL */}
                         <Route
                             path="specialties"
                             element={
-                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF]}>
+                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF, ROLES.PROFESSIONAL]}>
                                     <SpecialtiesPage />
                                 </ProtectedRoute>
                             }

@@ -14,6 +14,7 @@ const ProfessionalsPage = () => {
     const [currentProfessional, setCurrentProfessional] = useState(null);
     const [modalError, setModalError] = useState('');
     const [saving, setSaving] = useState(false);
+    const [expandedInsurancesId, setExpandedInsurancesId] = useState(null);
 
     // Form states
     const [formData, setFormData] = useState({
@@ -26,7 +27,9 @@ const ProfessionalsPage = () => {
         specialtyId: '',
         active: true,
         privateConsultationPrice: '',
-        acceptedInsurances: []
+        acceptedInsurances: [],
+        password: '',
+        confirmPassword: ''
     });
 
     // Insurance companies state
@@ -146,9 +149,29 @@ const ProfessionalsPage = () => {
         }));
     };
 
+    const validateForm = () => {
+        if (!currentProfessional) {
+            // Only validate password if it's being provided
+            if (formData.password) {
+                if (formData.password.length < 6) {
+                    setModalError('La contraseña debe tener al menos 6 caracteres');
+                    return false;
+                }
+                if (formData.password !== formData.confirmPassword) {
+                    setModalError('Las contraseñas no coinciden');
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setModalError('');
+
+        if (!validateForm()) return;
+
         setSaving(true);
 
         try {
@@ -286,16 +309,40 @@ const ProfessionalsPage = () => {
                                                     </div>
                                                 )}
                                                 {prof.acceptedInsurances && prof.acceptedInsurances.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1">
+                                                    <div className="flex flex-wrap gap-1 relative">
                                                         {prof.acceptedInsurances.slice(0, 2).map(insurance => (
                                                             <span key={insurance.id} className="badge badge-outline text-xs">
                                                                 {insurance.name}
                                                             </span>
                                                         ))}
                                                         {prof.acceptedInsurances.length > 2 && (
-                                                            <span className="text-xs text-gray-500">
-                                                                +{prof.acceptedInsurances.length - 2} más
-                                                            </span>
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={() => setExpandedInsurancesId(expandedInsurancesId === prof.id ? null : prof.id)}
+                                                                    className="text-xs text-primary-600 hover:text-primary-700 font-medium hover:underline cursor-pointer focus:outline-none"
+                                                                >
+                                                                    +{prof.acceptedInsurances.length - 2} más
+                                                                </button>
+
+                                                                {expandedInsurancesId === prof.id && (
+                                                                    <>
+                                                                        <div
+                                                                            className="fixed inset-0 z-10"
+                                                                            onClick={() => setExpandedInsurancesId(null)}
+                                                                        ></div>
+                                                                        <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 py-2 px-3 z-20 overflow-hidden transform transition-all duration-200 origin-top-left animate-in fade-in slide-in-from-top-1">
+                                                                            <p className="text-xs font-semibold text-gray-500 mb-2 border-b pb-1">Todas las obras sociales:</p>
+                                                                            <div className="flex flex-wrap gap-1">
+                                                                                {prof.acceptedInsurances.map(insurance => (
+                                                                                    <span key={insurance.id} className="badge badge-outline text-[10px] py-0 px-1 border-gray-200">
+                                                                                        {insurance.name}
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 )}
@@ -431,6 +478,43 @@ const ProfessionalsPage = () => {
                                         className="input"
                                     />
                                 </div>
+
+                                {/* Password fields only for new professionals */}
+                                {!currentProfessional && (
+                                    <>
+                                        <div className="form-group font-bold text-teal-600 md:col-span-2 mt-4 border-t pt-4">
+                                            Configuración de Cuenta
+                                        </div>
+                                        <div className="form-group text-xs text-gray-500 md:col-span-2 -mt-2 mb-2">
+                                            Opcional: Si completás estos campos, el profesional podrá acceder a su propio panel. Si los dejás vacíos, el profesional solo será gestionado por la secretaría/administración.
+                                        </div>
+                                        <div className="form-group border-l-4 border-teal-500 pl-4 bg-teal-50/30 py-2">
+                                            <label className="form-label">Contraseña *</label>
+                                            <input
+                                                type="password"
+                                                name="password"
+                                                value={formData.password}
+                                                onChange={handleInputChange}
+                                                className="input"
+                                                required={false}
+                                                minLength={6}
+                                                placeholder="Dejar vacío para NO crear cuenta"
+                                            />
+                                        </div>
+                                        <div className="form-group border-l-4 border-teal-500 pl-4 bg-teal-50/30 py-2">
+                                            <label className="form-label">Confirmar Contraseña *</label>
+                                            <input
+                                                type="password"
+                                                name="confirmPassword"
+                                                value={formData.confirmPassword}
+                                                onChange={handleInputChange}
+                                                className="input"
+                                                required={false}
+                                                placeholder="Repetir contraseña"
+                                            />
+                                        </div>
+                                    </>
+                                )}
                                 <div className="form-group md:col-span-2">
                                     <label className="form-label">Biografía</label>
                                     <textarea
