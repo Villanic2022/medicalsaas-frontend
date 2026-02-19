@@ -19,6 +19,7 @@ import PublicBookingPage from '../pages/appointments/PublicBookingPage';
 import TenantsPage from '../pages/admin/TenantsPage';
 import StaffPage from '../pages/staff/StaffPage';
 import InsuranceCompaniesPage from '../pages/insurance/InsuranceCompaniesPage';
+import MyAvailabilityPage from '../pages/professionals/MyAvailabilityPage';
 
 import { ROLES } from '../utils/constants';
 
@@ -152,6 +153,16 @@ const AppRoutes = () => {
                             element={
                                 <ProtectedRoute allowedRoles={[ROLES.OWNER]}>
                                     <InsuranceCompaniesPage />
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        {/* Mi Disponibilidad - solo PROFESSIONAL */}
+                        <Route
+                            path="my-availability"
+                            element={
+                                <ProtectedRoute allowedRoles={[ROLES.PROFESSIONAL]}>
+                                    <MyAvailabilityPage />
                                 </ProtectedRoute>
                             }
                         />

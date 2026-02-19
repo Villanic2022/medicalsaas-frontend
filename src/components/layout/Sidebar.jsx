@@ -92,6 +92,19 @@ const Sidebar = () => {
             );
         }
 
+        // Mi Disponibilidad - solo para PROFESSIONAL
+        if (user?.role === ROLES.PROFESSIONAL) {
+            items.push({
+                name: 'Mi Disponibilidad',
+                path: '/my-availability',
+                icon: (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                )
+            });
+        }
+
         // Obras Sociales - solo para OWNER
         if (user?.role === ROLES.OWNER) {
             items.push({
