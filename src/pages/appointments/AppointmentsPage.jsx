@@ -507,54 +507,56 @@ const AppointmentsPage = () => {
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap gap-4 items-end">
-                <div className="w-full sm:w-auto">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Filtrar por Fecha</label>
-                    <input
-                        type="date"
-                        value={dateFilter}
-                        onChange={(e) => setDateFilter(e.target.value)}
-                        className="input text-sm py-1.5 w-full sm:w-48"
-                    />
+            {/* Filters - Hidden for Professionals as they only see their own appointments */}
+            {user?.role !== 'PROFESSIONAL' && (
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap gap-4 items-end">
+                    <div className="w-full sm:w-auto">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Filtrar por Fecha</label>
+                        <input
+                            type="date"
+                            value={dateFilter}
+                            onChange={(e) => setDateFilter(e.target.value)}
+                            className="input text-sm py-1.5 w-full sm:w-48"
+                        />
+                    </div>
+                    <div className="w-full sm:w-auto">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Filtrar por Profesional</label>
+                        <select
+                            value={profFilter}
+                            onChange={(e) => setProfFilter(e.target.value)}
+                            className="input text-sm py-1.5 w-full sm:w-64"
+                            disabled={user?.role === 'PROFESSIONAL'}
+                        >
+                            {user?.role !== 'PROFESSIONAL' && <option value="">Todos los profesionales</option>}
+                            {professionals.map(p => (
+                                <option key={p.id} value={p.id}>
+                                    {p.firstName} {p.lastName} {p.specialty ? `(${p.specialty.name})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="w-full sm:w-auto">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Recordatorios WA</label>
+                        <select
+                            value={whatsappFilter}
+                            onChange={(e) => setWhatsappFilter(e.target.value)}
+                            className="input text-sm py-1.5 w-full sm:w-40"
+                        >
+                            <option value="PENDING">Pendientes hoy 🍒</option>
+                            <option value="SENT">Ya enviados ✅</option>
+                            <option value="ALL">Ver todos</option>
+                        </select>
+                    </div>
+                    {(dateFilter || profFilter || whatsappFilter !== 'PENDING') && (
+                        <button
+                            onClick={() => { setDateFilter(''); setProfFilter(''); setWhatsappFilter('PENDING'); }}
+                            className="btn btn-secondary text-sm py-1.5 h-[34px]"
+                        >
+                            Limpiar Filtros
+                        </button>
+                    )}
                 </div>
-                <div className="w-full sm:w-auto">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Filtrar por Profesional</label>
-                    <select
-                        value={profFilter}
-                        onChange={(e) => setProfFilter(e.target.value)}
-                        className="input text-sm py-1.5 w-full sm:w-64"
-                        disabled={user?.role === 'PROFESSIONAL'}
-                    >
-                        {user?.role !== 'PROFESSIONAL' && <option value="">Todos los profesionales</option>}
-                        {professionals.map(p => (
-                            <option key={p.id} value={p.id}>
-                                {p.firstName} {p.lastName} {p.specialty ? `(${p.specialty.name})` : ''}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div className="w-full sm:w-auto">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Recordatorios WA</label>
-                    <select
-                        value={whatsappFilter}
-                        onChange={(e) => setWhatsappFilter(e.target.value)}
-                        className="input text-sm py-1.5 w-full sm:w-40"
-                    >
-                        <option value="PENDING">Pendientes hoy 🍒</option>
-                        <option value="SENT">Ya enviados ✅</option>
-                        <option value="ALL">Ver todos</option>
-                    </select>
-                </div>
-                {(dateFilter || profFilter || whatsappFilter !== 'PENDING') && (
-                    <button
-                        onClick={() => { setDateFilter(''); setProfFilter(''); setWhatsappFilter('PENDING'); }}
-                        className="btn btn-secondary text-sm py-1.5 h-[34px]"
-                    >
-                        Limpiar Filtros
-                    </button>
-                )}
-            </div>
+            )}
 
             {/* Available Slots Panel - MAIN SCREEN (kept as is) */}
             {profFilter && dateFilter && (
