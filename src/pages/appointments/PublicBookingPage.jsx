@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { format, addDays, startOfToday, setHours, setMinutes } from 'date-fns';
+import { format, addDays, startOfToday, setHours, setMinutes, addMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 import publicAppointmentsService from '../../api/publicAppointmentsService';
 import { dateHasAvailability, getTimeSlotsForDate } from '../../utils/availabilityUtils';
@@ -20,6 +20,9 @@ const PublicBookingPage = () => {
 
     // Selection States
     const [selectedProfessional, setSelectedProfessional] = useState(null);
+    const [procedures, setProcedures] = useState([]);
+    const [selectedProcedure, setSelectedProcedure] = useState(null);
+    const [duration, setDuration] = useState(30);
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedTime, setSelectedTime] = useState(null);
     const [patientData, setPatientData] = useState({
@@ -65,7 +68,7 @@ const PublicBookingPage = () => {
     // Efecto para refrescar slots ocupados cada 30 segundos cuando hay una fecha seleccionada
     useEffect(() => {
         let interval;
-        
+
         if (selectedProfessional && selectedDate && slug && step === 2) {
             interval = setInterval(() => {
                 loadOccupiedSlots(selectedDate);
@@ -95,43 +98,59 @@ const PublicBookingPage = () => {
 
     const handleProfessionalSelect = async (prof) => {
         setSelectedProfessional(prof);
-        const previousDate = selectedDate; // Guardar fecha anterior
+        setSelectedProcedure(null);
+        setDuration(30);
         setSelectedDate(null);
         setSelectedTime(null);
-        setOccupiedSlots([]); // Limpiar slots ocupados
+        setOccupiedSlots([]);
         setLoading(true);
 
         try {
-            // Load availability for selected professional
-            const availData = await publicAppointmentsService.getProfessionalAvailability(slug, prof.id);
+            // Load procedures and availability for selected professional
+            // We catch getProcedures individually because it might fail (404) if the professional has no procedures
+            const [procData, availData] = await Promise.all([
+                publicAppointmentsService.getProcedures(slug, prof.id).catch(err => {
+                    console.warn('Could not fetch procedures for professional:', err);
+                    return []; // Return empty list on failure
+                }),
+                publicAppointmentsService.getProfessionalAvailability(slug, prof.id)
+            ]);
+
+            setProcedures(procData || []);
             setAvailability(availData || []);
 
             if (!availData || availData.length === 0) {
-                alert('Este profesional aún no tiene horarios configurados. Por favor contacte al consultorio.');
+                alert('Este profesional aún no tiene horarios configurados.');
                 setSelectedProfessional(null);
                 return;
             }
 
-            // Si había una fecha seleccionada antes, verificar si sigue siendo válida
-            if (previousDate && dateHasAvailability(previousDate, availData)) {
-                setSelectedDate(previousDate);
-                await loadOccupiedSlots(previousDate);
-            }
-
-            setStep(2);
+            setStep(2); // Go to Procedure Selection
         } catch (err) {
-            console.error('Error loading availability:', err);
-            alert('No se pudo cargar la disponibilidad del profesional.');
+            console.error('Error loading availability for professional:', err);
+            const msg = err.response?.data?.message || err.message;
+            const isNetworkError = err.code === 'ERR_NETWORK' || err.message?.includes('Network Error');
+            if (isNetworkError) {
+                alert(`Error de conexión con el servidor. Verifica que el servidor esté en funcionamiento y accesible desde esta red.`);
+            } else {
+                alert(`No se pudo cargar la información del profesional. ${msg ? `(${msg})` : ''}`);
+            }
             setSelectedProfessional(null);
         } finally {
             setLoading(false);
         }
     };
 
+    const handleProcedureSelect = (proc) => {
+        setSelectedProcedure(proc);
+        setDuration(proc ? proc.durationMinutes : 30);
+        setStep(3); // Go to Date/Time Selection
+    };
+
     const handleDateSelect = async (date) => {
         setSelectedDate(date);
         setSelectedTime(null);
-        
+
         if (selectedProfessional && date && slug) {
             setLoadingSlots(true);
             await loadOccupiedSlots(date);
@@ -143,14 +162,37 @@ const PublicBookingPage = () => {
         try {
             const dateString = format(date, 'yyyy-MM-dd');
             const appointments = await publicAppointmentsService.getAppointments(slug, selectedProfessional.id, dateString);
-            
+
             if (Array.isArray(appointments) && appointments.length > 0) {
-                const occupied = appointments
-                    .filter(appt => appt.status === 'CONFIRMED' || appt.status === 'Confirmado')
-                    .map(appt => {
-                        const d = new Date(appt.startDateTime);
-                        return format(d, 'HH:mm');
+                // Generate slots to check against
+                const slots = getTimeSlotsForDate(date, availability);
+                const occupied = [];
+
+                slots.forEach(slotTime => {
+                    const slotStart = new Date(`${dateString}T${slotTime}`);
+
+                    const isBusy = appointments.some(appt => {
+                        if (appt.status === 'CANCELLED' || appt.status === 'Cancelado') return false;
+
+                        const apptStart = new Date(appt.startDateTime);
+                        // Backend uses camelCase
+                        const apptDuration = appt.durationMinutes || 30;
+                        const apptEnd = addMinutes(apptStart, apptDuration);
+
+                        // Calculate the end time for the *current* requested procedure duration
+                        const requestedSlotEnd = addMinutes(slotStart, duration);
+
+                        // A slot is occupied if the requested time interval [slotStart, requestedSlotEnd)
+                        // overlaps with an existing appointment [apptStart, apptEnd).
+                        // Overlap condition: (start1 < end2) && (end1 > start2)
+                        return (apptStart < requestedSlotEnd) && (apptEnd > slotStart);
                     });
+
+                    if (isBusy) {
+                        occupied.push(slotTime);
+                    }
+                });
+
                 setOccupiedSlots(occupied);
             } else {
                 setOccupiedSlots([]);
@@ -163,7 +205,7 @@ const PublicBookingPage = () => {
 
     const handleTimeSelect = (time) => {
         setSelectedTime(time);
-        setStep(3); // Auto advance to patient data
+        setStep(4); // Auto advance to patient data
     };
 
     const handlePatientChange = (e) => {
@@ -184,6 +226,8 @@ const PublicBookingPage = () => {
 
         const payload = {
             professionalId: selectedProfessional.id,
+            procedureId: selectedProcedure?.id || null,
+            durationMinutes: Number(duration),
             startDateTime: startDateTime.toISOString(),
             notes: "Reserva web",
             patient: patientData
@@ -191,9 +235,8 @@ const PublicBookingPage = () => {
 
         try {
             const result = await publicAppointmentsService.createAppointment(slug, payload);
-            console.log('Confirmation Result:', result); // DEBUG: Ver respuesta del backend
             setConfirmationResult(result);
-            setStep(4); // Success Step
+            setStep(5); // Success Step
         } catch (err) {
             console.error('Error creating appointment:', err);
             alert('Hubo un error al confirmar el turno. Por favor intente nuevamente.');
@@ -236,11 +279,11 @@ const PublicBookingPage = () => {
                     {loading && tenant && <LoadingOverlay />}
 
                     {/* Progress Bar */}
-                    {step < 4 && (
+                    {step < 5 && (
                         <div className="bg-gray-100 h-2 w-full">
                             <div
                                 className="bg-primary-500 h-2 transition-all duration-500"
-                                style={{ width: `${((step - 1) / 3) * 100}%` }}
+                                style={{ width: `${((step - 1) / 4) * 100}%` }}
                             ></div>
                         </div>
                     )}
@@ -264,7 +307,7 @@ const PublicBookingPage = () => {
                                                 <div className="ml-4 flex-1">
                                                     <p className="font-semibold text-gray-900">{prof.fullName}</p>
                                                     <p className="text-sm text-gray-500">{prof.specialty?.name}</p>
-                                                    
+
                                                     {/* Información de consulta y obras sociales */}
                                                     <div className="mt-2">
                                                         {prof.privateConsultationPrice && (
@@ -300,30 +343,54 @@ const PublicBookingPage = () => {
                             </div>
                         )}
 
-                        {/* STEP 2: Selección de Fecha y Hora */}
+                        {/* STEP 2: Selección de Procedimiento */}
                         {step === 2 && (
                             <div className="fade-in">
                                 <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-900 mb-4 flex items-center">
                                     ← Volver
                                 </button>
+                                <h2 className="text-xl font-bold text-gray-900 mb-6">Seleccione un Procedimiento</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div
+                                        onClick={() => handleProcedureSelect(null)}
+                                        className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all group"
+                                    >
+                                        <p className="font-semibold text-gray-900">Consulta General</p>
+                                        <p className="text-sm text-gray-500">Duración: 30 min</p>
+                                    </div>
+                                    {procedures.map(proc => (
+                                        <div
+                                            key={proc.id}
+                                            onClick={() => handleProcedureSelect(proc)}
+                                            className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-primary-500 hover:shadow-md transition-all group"
+                                        >
+                                            <p className="font-semibold text-gray-900">{proc.name}</p>
+                                            <p className="text-sm text-gray-500">Duración: {proc.durationMinutes} min</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* STEP 3: Selección de Fecha y Hora */}
+                        {step === 3 && (
+                            <div className="fade-in">
+                                <button onClick={() => setStep(2)} className="text-sm text-gray-500 hover:text-gray-900 mb-4 flex items-center">
+                                    ← Volver
+                                </button>
                                 <h2 className="text-xl font-bold text-gray-900 mb-2">Seleccione Fecha y Hora</h2>
                                 <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                                    <p className="text-gray-600 mb-2">Turno con <span className="font-semibold">{selectedProfessional.fullName}</span> ({selectedProfessional.specialty?.name})</p>
-                                    <div className="flex flex-col space-y-1 text-sm">
+                                    <p className="text-gray-600 mb-1">Turno con <span className="font-semibold">{selectedProfessional.fullName}</span></p>
+                                    <p className="text-sm text-primary-600 font-medium pb-2 select-none border-b border-gray-100">
+                                        Procedimiento: {selectedProcedure ? selectedProcedure.name : 'Consulta General'} ({duration} min)
+                                    </p>
+                                    <div className="flex flex-col space-y-1 text-sm pt-2">
                                         {selectedProfessional.privateConsultationPrice && (
                                             <div className="flex items-center text-green-700">
                                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                                                 </svg>
                                                 <span>Consulta particular: ${selectedProfessional.privateConsultationPrice?.toLocaleString()}</span>
-                                            </div>
-                                        )}
-                                        {selectedProfessional.acceptedInsurances && selectedProfessional.acceptedInsurances.length > 0 && (
-                                            <div className="flex items-center text-blue-700">
-                                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                                                </svg>
-                                                <span>Acepta: {selectedProfessional.acceptedInsurances.map(ins => ins.name).join(', ')}</span>
                                             </div>
                                         )}
                                     </div>
@@ -367,42 +434,41 @@ const PublicBookingPage = () => {
                                                     </div>
                                                 ) : (
                                                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                                                    {timeSlots.length > 0 ? (
-                                                        timeSlots.map(time => {
-                                                            const isOccupied = occupiedSlots.includes(time);
-                                                            return (
-                                                                <button
-                                                                    key={time}
-                                                                    onClick={() => {
-                                                                        if (isOccupied) {
-                                                                            alert('Este horario ya está ocupado');
-                                                                            return;
-                                                                        }
-                                                                        handleTimeSelect(time);
-                                                                    }}
-                                                                    style={{
-                                                                        backgroundColor: isOccupied ? '#f3f4f6' : '',
-                                                                        borderColor: isOccupied ? '#d1d5db' : '',
-                                                                        color: isOccupied ? '#9ca3af' : '',
-                                                                        cursor: isOccupied ? 'not-allowed' : 'pointer'
-                                                                    }}
-                                                                    className={`px-3 py-2 border rounded-lg text-sm font-medium ${
-                                                                        isOccupied
+                                                        {timeSlots.length > 0 ? (
+                                                            timeSlots.map(time => {
+                                                                const isOccupied = occupiedSlots.includes(time);
+                                                                return (
+                                                                    <button
+                                                                        key={time}
+                                                                        onClick={() => {
+                                                                            if (isOccupied) {
+                                                                                alert('Este horario ya está ocupado');
+                                                                                return;
+                                                                            }
+                                                                            handleTimeSelect(time);
+                                                                        }}
+                                                                        style={{
+                                                                            backgroundColor: isOccupied ? '#f3f4f6' : '',
+                                                                            borderColor: isOccupied ? '#d1d5db' : '',
+                                                                            color: isOccupied ? '#9ca3af' : '',
+                                                                            cursor: isOccupied ? 'not-allowed' : 'pointer'
+                                                                        }}
+                                                                        className={`px-3 py-2 border rounded-lg text-sm font-medium ${isOccupied
                                                                             ? 'opacity-50'
                                                                             : selectedTime === time
-                                                                            ? 'bg-primary-600 border-primary-600 text-white'
-                                                                            : 'border-primary-200 text-primary-700 hover:bg-primary-50'
-                                                                    }`}
-                                                                >
-                                                                    {time}
-                                                                    {isOccupied && " ❌"}
-                                                                </button>
-                                                            );
-                                                        })
-                                                    ) : (
-                                                        <p className="col-span-full text-gray-500 text-sm italic">No hay horarios disponibles para este día</p>
-                                                    )}
-                                                </div>
+                                                                                ? 'bg-primary-600 border-primary-600 text-white'
+                                                                                : 'border-primary-200 text-primary-700 hover:bg-primary-50'
+                                                                            }`}
+                                                                    >
+                                                                        {time}
+                                                                        {isOccupied && " ❌"}
+                                                                    </button>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <p className="col-span-full text-gray-500 text-sm italic">No hay horarios disponibles para este día</p>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         ) : (
@@ -415,17 +481,17 @@ const PublicBookingPage = () => {
                             </div>
                         )}
 
-                        {/* STEP 3: Datos del Paciente */}
-                        {step === 3 && (
+                        {/* STEP 4: Datos del Paciente */}
+                        {step === 4 && (
                             <div className="fade-in">
-                                <button onClick={() => setStep(2)} className="text-sm text-gray-500 hover:text-gray-900 mb-4 flex items-center">
+                                <button onClick={() => setStep(3)} className="text-sm text-gray-500 hover:text-gray-900 mb-4 flex items-center">
                                     ← Volver
                                 </button>
                                 <h2 className="text-xl font-bold text-gray-900 mb-2">Completar Datos</h2>
 
                                 <div className="bg-primary-50 rounded-lg p-4 mb-6 text-sm">
                                     <div className="text-primary-800 font-medium mb-2">
-                                        Resumiendo: Turno con <b>{selectedProfessional.fullName}</b> para el <b>{format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}</b> a las <b>{selectedTime} hs</b>.
+                                        Resumiendo: {selectedProcedure ? selectedProcedure.name : 'Consulta'} con <b>{selectedProfessional.fullName}</b> para el <b>{format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}</b> a las <b>{selectedTime} hs</b>.
                                     </div>
                                     {selectedProfessional.privateConsultationPrice && (
                                         <div className="text-green-700 text-sm">
@@ -537,8 +603,8 @@ const PublicBookingPage = () => {
                             </div>
                         )}
 
-                        {/* STEP 4: Confirmación Exitosa */}
-                        {step === 4 && confirmationResult && (
+                        {/* STEP 5: Confirmación Exitosa */}
+                        {step === 5 && confirmationResult && (
                             <div className="text-center py-8 fade-in">
                                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                                     <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

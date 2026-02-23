@@ -13,6 +13,7 @@ import DashboardPage from '../pages/dashboard/DashboardPage';
 import ProfessionalsPage from '../pages/professionals/ProfessionalsPage';
 import SpecialtiesPage from '../pages/specialties/SpecialtiesPage';
 import AppointmentsPage from '../pages/appointments/AppointmentsPage';
+import ProceduresPage from '../pages/admin/ProceduresPage';
 import PatientsPage from '../pages/patients/PatientsPage';
 import PatientDetailsPage from '../pages/patients/PatientDetailsPage';
 import PublicBookingPage from '../pages/appointments/PublicBookingPage';
@@ -173,6 +174,16 @@ const AppRoutes = () => {
                             element={
                                 <ProtectedRoute allowedRoles={[ROLES.OWNER]}>
                                     <StaffPage />
+                                </ProtectedRoute>
+                            }
+                        />
+
+                        {/* Procedimientos - OWNER, STAFF, PROFESSIONAL */}
+                        <Route
+                            path="procedures"
+                            element={
+                                <ProtectedRoute allowedRoles={[ROLES.OWNER, ROLES.STAFF, ROLES.PROFESSIONAL]}>
+                                    <ProceduresPage />
                                 </ProtectedRoute>
                             }
                         />

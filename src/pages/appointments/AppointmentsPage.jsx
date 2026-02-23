@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'; // Added for consistency if need
 import { useAuth } from '../../contexts/AuthContext';
 import appointmentsService from '../../api/appointmentsService';
 import professionalsService from '../../api/professionalsService';
-import { format, addDays, startOfWeek, isSameDay, parseISO, startOfDay, addMinutes } from 'date-fns';
+import proceduresService from '../../api/proceduresService';
+import { format, addDays, startOfWeek, isSameDay, parseISO, startOfDay, addMinutes, isWithinInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Toast from '../../components/ui/Toast';
 
@@ -12,6 +13,7 @@ const AppointmentsPage = () => {
     const [appointments, setAppointments] = useState([]);
     const [professionals, setProfessionals] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [procedures, setProcedures] = useState([]);
     const [error, setError] = useState(null);
     const [toast, setToast] = useState(null); // { message, type }
 
@@ -40,7 +42,9 @@ const AppointmentsPage = () => {
             phone: '',
             insuranceName: '',
             insuranceNumber: ''
-        }
+        },
+        procedureId: '',
+        durationMinutes: 30,
     });
 
     // Filters
@@ -207,7 +211,18 @@ const AppointmentsPage = () => {
                 });
 
                 const slotsWithStatus = allSlots.map(slot => {
-                    const appointment = bookedTimesMap.get(slot);
+                    const slotStart = new Date(`${dateFilter}T${slot}`);
+
+                    // IMPROVED OVERLAP LOGIC
+                    // Find any appointment that covers this slot time
+                    const appointment = bookedAppointments.find(appt => {
+                        const apptStart = new Date(appt.startDateTime);
+                        const apptEnd = addMinutes(apptStart, appt.durationMinutes || 30);
+
+                        // If the slot start is within [apptStart, apptEnd), the slot is busy
+                        return slotStart >= apptStart && slotStart < apptEnd;
+                    });
+
                     return {
                         time: slot,
                         isAvailable: !appointment,
@@ -229,21 +244,38 @@ const AppointmentsPage = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [fetchedAppointments, fetchedProfessionals] = await Promise.all([
+            const [fetchedAppointments, fetchedProfessionals, fetchedProcedures] = await Promise.all([
                 appointmentsService.getAll(),
-                professionalsService.getAll()
+                professionalsService.getAll(),
+                proceduresService.getAll().catch(() => [])
             ]);
+
+            // Map backend data to ensure both camelCase and snake_case work
+            let rawProcedures = fetchedProcedures;
+            if (fetchedProcedures?.data && Array.isArray(fetchedProcedures.data)) rawProcedures = fetchedProcedures.data;
+            if (fetchedProcedures?.content && Array.isArray(fetchedProcedures.content)) rawProcedures = fetchedProcedures.content;
+
+            const mappedProcedures = (Array.isArray(rawProcedures) ? rawProcedures : []).map(p => ({
+                ...p,
+                durationMinutes: p.durationMinutes || p.duration_minutes
+            }));
+            setProcedures(mappedProcedures);
+
+            const mappedAppointments = (fetchedAppointments || []).map(a => ({
+                ...a,
+                durationMinutes: a.durationMinutes || a.duration_minutes
+            }));
 
             // Si es PROFESIONAL, filtrar solo sus turnos
             if (user?.role === 'PROFESSIONAL') {
                 const profId = user.professionalId || user.id;
-                const filteredAppts = fetchedAppointments.filter(appt =>
+                const filteredAppts = mappedAppointments.filter(appt =>
                     appt.professional?.id === profId || appt.professionalId === profId
                 );
                 setAppointments(filteredAppts);
                 setProfFilter(profId.toString());
             } else {
-                setAppointments(fetchedAppointments);
+                setAppointments(mappedAppointments);
             }
 
             setProfessionals(fetchedProfessionals);
@@ -291,6 +323,14 @@ const AppointmentsPage = () => {
                     [child]: value
                 }
             }));
+        } else if (name === 'professionalId') {
+            // Al cambiar de profesional, limpiar el procedimiento seleccionado
+            setFormData(prev => ({
+                ...prev,
+                professionalId: value,
+                procedureId: '',
+                durationMinutes: 30
+            }));
         } else {
             setFormData(prev => ({
                 ...prev,
@@ -307,7 +347,9 @@ const AppointmentsPage = () => {
             const startDateTime = `${formData.date}T${formData.time}:00`;
 
             const payload = {
-                professionalId: Number(formData.professionalId), // Ensure it is a number
+                professionalId: Number(formData.professionalId),
+                procedureId: formData.procedureId ? Number(formData.procedureId) : null,
+                durationMinutes: Number(formData.durationMinutes),
                 startDateTime: startDateTime,
                 notes: formData.notes,
                 patient: formData.patient
@@ -333,7 +375,9 @@ const AppointmentsPage = () => {
                 date: '',
                 time: '',
                 notes: '',
-                patient: { firstName: '', lastName: '', dni: '', email: '', phone: '', insuranceName: '', insuranceNumber: '' }
+                patient: { firstName: '', lastName: '', dni: '', email: '', phone: '', insuranceName: '', insuranceNumber: '' },
+                procedureId: '',
+                durationMinutes: 30
             });
             setToast({ message: '¡Turno creado exitosamente! 🚀', type: 'success' });
         } catch (err) {
@@ -353,7 +397,9 @@ const AppointmentsPage = () => {
             date: dateFilter,
             time: timeSlot,
             notes: '',
-            patient: { firstName: '', lastName: '', dni: '', email: '', phone: '', insuranceName: '', insuranceNumber: '' }
+            patient: { firstName: '', lastName: '', dni: '', email: '', phone: '', insuranceName: '', insuranceNumber: '' },
+            procedureId: '',
+            durationMinutes: 30
         });
         setIsCreateModalOpen(true);
     };
@@ -451,10 +497,11 @@ const AppointmentsPage = () => {
             // Check date/time overlap
             // Simplest: Check exact match of start time
             // Ideally should check duration overlap, but let's stick to start time for now
-            const apptStart = appt.startDateTime; // ISO String
-            const slotIso = `${dateStr}T${timeStr}`;
+            const apptStart = new Date(appt.startDateTime);
+            const apptEnd = addMinutes(apptStart, appt.durationMinutes || 30);
+            const slotStart = new Date(`${dateStr}T${timeStr}`);
 
-            return apptStart.startsWith(slotIso);
+            return slotStart >= apptStart && slotStart < apptEnd;
         });
     };
 
@@ -641,6 +688,7 @@ const AppointmentsPage = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase font-bold text-teal-600">WhatsApp</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha/Hora</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Paciente</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Procedimiento</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profesional</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
@@ -684,6 +732,10 @@ const AppointmentsPage = () => {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-900">{appt.patient?.fullName || 'Desconocido'}</div>
                                             <div className="text-sm text-gray-500">{appt.patient?.phone}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {appt.procedure?.name || <span className="text-gray-400">Consulta</span>}
+                                            <div className="text-xs text-gray-400">{appt.durationMinutes} min</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {appt.professional?.fullName}
@@ -743,6 +795,7 @@ const AppointmentsPage = () => {
                                 </div>
                                 <div className="flex items-center space-x-4">
                                     <button
+                                        type="button"
                                         onClick={() => setAvailabilityViewDate(prev => addDays(prev, -7))}
                                         className="p-2 hover:bg-gray-200 rounded-full text-gray-600"
                                         title="Semana Anterior"
@@ -758,6 +811,7 @@ const AppointmentsPage = () => {
                                         </span>
                                     </div>
                                     <button
+                                        type="button"
                                         onClick={() => setAvailabilityViewDate(prev => addDays(prev, 7))}
                                         className="p-2 hover:bg-gray-200 rounded-full text-gray-600"
                                         title="Semana Siguiente"
@@ -767,6 +821,7 @@ const AppointmentsPage = () => {
                                 </div>
                                 <div className="w-full sm:w-1/3 text-right">
                                     <button
+                                        type="button"
                                         onClick={() => setAvailabilityViewDate(new Date())}
                                         className="text-xs text-teal-600 font-medium hover:underline"
                                     >
@@ -887,6 +942,51 @@ const AppointmentsPage = () => {
                                                 ))}
                                             </select>
                                         )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700">Procedimiento (Opcional)</label>
+                                            <select
+                                                name="procedureId"
+                                                value={formData.procedureId}
+                                                onChange={(e) => {
+                                                    const procId = e.target.value;
+                                                    const proc = procedures.find(p => p.id == procId);
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        procedureId: procId,
+                                                        durationMinutes: proc ? proc.durationMinutes : prev.durationMinutes
+                                                    }));
+                                                }}
+                                                className="mt-1 input block w-full"
+                                            >
+                                                <option value="">Selección libre...</option>
+                                                {(() => {
+                                                    const selectedProf = professionals.find(p => p.id == formData.professionalId);
+                                                    const profSpecialtyId = selectedProf?.specialty?.id || selectedProf?.specialtyId;
+                                                    const filteredProcs = profSpecialtyId 
+                                                        ? procedures.filter(p => p.specialtyId == profSpecialtyId || p.specialty_id == profSpecialtyId)
+                                                        : procedures;
+                                                    return filteredProcs.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.name} ({p.durationMinutes} min)</option>
+                                                    ));
+                                                })()}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700">Duración (minutos)</label>
+                                            <input
+                                                type="number"
+                                                name="durationMinutes"
+                                                value={formData.durationMinutes}
+                                                onChange={handleInputChange}
+                                                min="5"
+                                                step="5"
+                                                className="mt-1 input block w-full"
+                                                required
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
