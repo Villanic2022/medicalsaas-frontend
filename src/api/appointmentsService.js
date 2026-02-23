@@ -55,7 +55,7 @@ export const updateStatus = async (id, status) => {
  * PATCH /appointments/{id}/notified
  */
 export const markAsNotified = async (id) => {
-    const response = await axiosInstance.patch(`/appointments/${id}/notified`);
+    const response = await axiosInstance.patch(`/appointments/${id}/notified`, {});
     return response.data;
 };
 

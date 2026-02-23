@@ -7,6 +7,9 @@ import { API_CONFIG } from '../utils/constants';
  * but we can use a new instance if needed. For simplicity we'll use axios directly here or a public instance.
  */
 
+// Log la URL base para debugging
+console.log('[PublicBooking] API Base URL:', API_CONFIG.BASE_URL);
+
 const publicAxios = axios.create({
     baseURL: API_CONFIG.BASE_URL,
     headers: {
@@ -69,11 +72,17 @@ export const getProfessionalAvailability = async (slug, professionalId) => {
     return response.data;
 };
 
+export const getProcedures = async (slug, professionalId) => {
+    const response = await publicAxios.get(`/t/${slug}/professionals/${professionalId}/procedures`);
+    return response.data;
+};
+
 export default {
     getTenantInfo,
     getProfessionals: getTenantProfessionals,
     getSpecialties: getTenantSpecialties,
     createAppointment,
     getProfessionalAvailability,
+    getProcedures,
     getAppointments
 };
