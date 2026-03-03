@@ -678,7 +678,7 @@ const AppointmentsPage = () => {
             {error && <div className="text-red-600 bg-red-50 p-4 rounded">{error}</div>}
 
             {/* List */}
-            <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="bg-white shadow rounded-lg overflow-hidden overflow-x-auto">
                 {loading ? (
                     <div className="p-8 text-center">Cargando...</div>
                 ) : (
@@ -965,7 +965,7 @@ const AppointmentsPage = () => {
                                                 {(() => {
                                                     const selectedProf = professionals.find(p => p.id == formData.professionalId);
                                                     const profSpecialtyId = selectedProf?.specialty?.id || selectedProf?.specialtyId;
-                                                    const filteredProcs = profSpecialtyId 
+                                                    const filteredProcs = profSpecialtyId
                                                         ? procedures.filter(p => p.specialtyId == profSpecialtyId || p.specialty_id == profSpecialtyId)
                                                         : procedures;
                                                     return filteredProcs.map(p => (
