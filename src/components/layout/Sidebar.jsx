@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROLES } from '../../utils/constants';
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onClose }) => {
     const { user } = useAuth();
 
     // Configuración de navegación según rol
@@ -133,68 +133,79 @@ const Sidebar = () => {
     const navigationItems = getNavigationItems();
 
     return (
-        <div className="sidebar">
-            {/* Logo */}
-            <div className="px-6 py-6 border-b border-primary-700">
-                <div className="flex items-center">
-                    <div className="flex items-center justify-center w-10 h-10 bg-white rounded-lg mr-3">
-                        <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold text-white">MediSaaS</h2>
-                        <p className="text-xs text-primary-200">Gestión Médica</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Información del consultorio (solo para non-admin) */}
-            {user?.role !== ROLES.ADMIN && user?.tenantSlug && (
-                <div className="px-6 py-4 bg-primary-900 bg-opacity-50">
-                    <p className="text-xs text-primary-200 mb-1">Consultorio</p>
-                    <p className="text-sm font-medium text-white truncate font-mono">
-                        {user.tenantSlug}
-                    </p>
-                </div>
+        <>
+            {/* Mobile Overlay */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 bg-gray-800 bg-opacity-75 z-30 md:hidden transition-opacity"
+                    onClick={onClose}
+                />
             )}
 
-            {/* Navegación */}
-            <nav className="mt-6 flex-1">
-                {navigationItems.map((item) => (
-                    <NavLink
-                        key={item.path}
-                        to={item.path}
-                        className={({ isActive }) =>
-                            `sidebar-item ${isActive ? 'sidebar-item-active' : ''}`
-                        }
-                    >
-                        {item.icon}
-                        <span className="ml-3">{item.name}</span>
-                    </NavLink>
-                ))}
-            </nav>
-
-            {/* Información del usuario en la parte inferior */}
-            <div className="px-6 py-4 border-t border-primary-700">
-                <div className="flex items-center">
-                    <div className="flex items-center justify-center w-10 h-10 bg-primary-700 rounded-full text-white font-semibold">
-                        {user?.firstName?.[0]}{user?.lastName?.[0]}
+            <div className={`sidebar ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+                {/* Logo */}
+                <div className="px-6 py-6 border-b border-primary-700">
+                    <div className="flex items-center">
+                        <div className="flex items-center justify-center w-10 h-10 bg-white rounded-lg mr-3">
+                            <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white">MediSaaS</h2>
+                            <p className="text-xs text-primary-200">Gestión Médica</p>
+                        </div>
                     </div>
-                    <div className="ml-3 flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
-                            {user?.firstName} {user?.lastName}
+                </div>
+
+                {/* Información del consultorio (solo para non-admin) */}
+                {user?.role !== ROLES.ADMIN && user?.tenantSlug && (
+                    <div className="px-6 py-4 bg-primary-900 bg-opacity-50">
+                        <p className="text-xs text-primary-200 mb-1">Consultorio</p>
+                        <p className="text-sm font-medium text-white truncate font-mono">
+                            {user.tenantSlug}
                         </p>
-                        <p className="text-xs text-primary-200">
-                            {user?.role === ROLES.ADMIN && 'Administrador'}
-                            {user?.role === ROLES.OWNER && 'Propietario'}
-                            {user?.role === ROLES.STAFF && 'Staff'}
-                            {user?.role === ROLES.PROFESSIONAL && 'Profesional'}
-                        </p>
+                    </div>
+                )}
+
+                {/* Navegación */}
+                <nav className="mt-6 flex-1">
+                    {navigationItems.map((item) => (
+                        <NavLink
+                            key={item.path}
+                            to={item.path}
+                            onClick={onClose}
+                            className={({ isActive }) =>
+                                `sidebar-item ${isActive ? 'sidebar-item-active' : ''}`
+                            }
+                        >
+                            {item.icon}
+                            <span className="ml-3">{item.name}</span>
+                        </NavLink>
+                    ))}
+                </nav>
+
+                {/* Información del usuario en la parte inferior */}
+                <div className="px-6 py-4 border-t border-primary-700">
+                    <div className="flex items-center">
+                        <div className="flex items-center justify-center w-10 h-10 bg-primary-700 rounded-full text-white font-semibold">
+                            {user?.firstName?.[0]}{user?.lastName?.[0]}
+                        </div>
+                        <div className="ml-3 flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                                {user?.firstName} {user?.lastName}
+                            </p>
+                            <p className="text-xs text-primary-200">
+                                {user?.role === ROLES.ADMIN && 'Administrador'}
+                                {user?.role === ROLES.OWNER && 'Propietario'}
+                                {user?.role === ROLES.STAFF && 'Staff'}
+                                {user?.role === ROLES.PROFESSIONAL && 'Profesional'}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 };
 

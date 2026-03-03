@@ -128,7 +128,7 @@
   
   /* Sidebar */
   .sidebar {
-    @apply fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-primary-800 to-primary-900 text-white shadow-xl z-40;
+    @apply fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-primary-800 to-primary-900 text-white shadow-xl z-40 transition-transform duration-300;
   }
   
   .sidebar-item {
