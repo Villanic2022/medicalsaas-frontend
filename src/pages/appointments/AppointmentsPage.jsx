@@ -205,18 +205,22 @@ const AppointmentsPage = () => {
 
                 const bookedTimesMap = new Map();
                 bookedAppointments.forEach(appt => {
+                    // Use UTC methods to avoid timezone offset (e.g. UTC-3 in Argentina)
                     const dateTime = new Date(appt.startDateTime);
-                    const timeString = `${String(dateTime.getHours()).padStart(2, '0')}:${String(dateTime.getMinutes()).padStart(2, '0')}`;
+                    const timeString = `${String(dateTime.getUTCHours()).padStart(2, '0')}:${String(dateTime.getUTCMinutes()).padStart(2, '0')}`;
                     bookedTimesMap.set(timeString, appt);
                 });
 
                 const slotsWithStatus = allSlots.map(slot => {
-                    const slotStart = new Date(`${dateFilter}T${slot}`);
+                    // Use UTC time for slot to match the UTC-based appointment times
+                    const slotStart = new Date(`${dateFilter}T${slot}:00Z`);
 
                     // IMPROVED OVERLAP LOGIC
                     // Find any appointment that covers this slot time
                     const appointment = bookedAppointments.find(appt => {
-                        const apptStart = new Date(appt.startDateTime);
+                        // Parse startDateTime as UTC (backend stores without timezone info)
+                        const apptStartRaw = appt.startDateTime.endsWith('Z') ? appt.startDateTime : appt.startDateTime + 'Z';
+                        const apptStart = new Date(apptStartRaw);
                         const apptEnd = addMinutes(apptStart, appt.durationMinutes || 30);
 
                         // If the slot start is within [apptStart, apptEnd), the slot is busy
@@ -605,75 +609,7 @@ const AppointmentsPage = () => {
                 </div>
             )}
 
-            {/* Available Slots Panel - MAIN SCREEN (kept as is) */}
-            {profFilter && dateFilter && (
-                <div className="bg-gradient-to-br from-teal-50 to-white p-6 rounded-lg shadow-sm border-2 border-teal-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center">
-                                <svg className="w-5 h-5 mr-2 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                Turnos Disponibles
-                            </h3>
-                            <p className="text-sm text-gray-600 mt-1">
-                                {professionals.find(p => p.id == profFilter)?.fullName} - {(() => {
-                                    const [year, month, day] = dateFilter.split('-').map(Number);
-                                    const dateObj = new Date(year, month - 1, day);
-                                    return format(dateObj, 'dd/MM/yyyy', { locale: es });
-                                })()}
-                            </p>
-                        </div>
-                        {loadingSlots && <div className="text-sm text-teal-600">Calculando...</div>}
-                    </div>
 
-                    {!loadingSlots && availableSlots.length === 0 && (
-                        <div className="text-center py-8 text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
-                            <svg className="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <p className="font-medium">No hay turnos disponibles</p>
-                            <p className="text-sm mt-1">El profesional no tiene horarios configurados para este día o todos los turnos están ocupados.</p>
-                        </div>
-                    )}
-
-                    {!loadingSlots && availableSlots.length > 0 && (
-                        <div>
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                                {availableSlots.map((slot, idx) => (
-                                    slot.isAvailable ? (
-                                        <button
-                                            key={idx}
-                                            onClick={() => handleQuickBook(slot.time)}
-                                            className="px-3 py-2 bg-white border-2 border-teal-300 text-teal-700 rounded-lg hover:bg-teal-500 hover:text-white hover:border-teal-500 transition-all font-medium text-sm shadow-sm hover:shadow-md"
-                                            title={`Crear turno a las ${slot.time}`}
-                                        >
-                                            ✓ {slot.time}
-                                        </button>
-                                    ) : (
-                                        <button
-                                            key={idx}
-                                            disabled
-                                            className="px-3 py-2 bg-gray-100 border-2 border-gray-300 text-gray-500 rounded-lg font-medium text-sm cursor-not-allowed opacity-60"
-                                            title={`Ocupado - ${slot.appointment?.patient?.fullName || 'Paciente'}`}
-                                        >
-                                            ✗ {slot.time}
-                                        </button>
-                                    )
-                                ))}
-                            </div>
-                            <div className="flex items-center justify-center gap-6 mt-4 text-xs text-gray-600">
-                                <div className="flex items-center gap-1">
-                                    <span className="text-teal-600 font-bold">✓</span> Disponible - Haz clic para agendar
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-gray-500 font-bold">✗</span> Ocupado
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
 
             {error && <div className="text-red-600 bg-red-50 p-4 rounded">{error}</div>}
 
